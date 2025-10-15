@@ -1,0 +1,373 @@
+import gc
+
+import torch
+
+import torch.optim as optim
+import time
+import argparse
+import os
+# from model.Net import *
+import numpy as np
+from numpy.distutils.fcompiler import str2bool
+
+from model.ST_GCN_AltFormer import ST_GCN_AltFormer
+from dataset.utils import kmer_parser,cv_folds
+from dataset import kmer_chemistry
+#from dataset_node import *
+from scipy.stats import pearsonr
+
+
+def init_model():
+
+    model = ST_GCN_AltFormer(channel=8, backbone_in_c=128, num_frame=6, num_joints=22,style='ST')
+    model = torch.nn.DataParallel(model).cuda()
+
+    return model
+
+def init():
+
+    model = init_model()
+    model_solver = optim.AdamW(model.parameters(), lr=2e-4, weight_decay=0.01)
+    criterion = torch.nn.MSELoss()
+
+    return model, model_solver, criterion
+
+
+def model_foreward(sample_batched, model,criterion):
+
+    data = sample_batched['X'].float()
+    A_batched = sample_batched['A'].float()
+    label = sample_batched['pA']
+    label = label.cuda()
+    label = torch.autograd.Variable(label, requires_grad=False)
+    label = label.unsqueeze(1)
+    score,_,_ = model(data,A_batched)
+    score = score.to(dtype=torch.float64)
+    loss = criterion(score, label)
+    Rmse,r = get_acc(score, label)
+
+    return score, loss, Rmse,r
+
+def model_predict(X,A,pA,model,criterion):
+    model.eval()
+    with torch.no_grad():
+        label = torch.tensor(pA).float().cuda()
+        label = torch.autograd.Variable(label, requires_grad=False)
+        label = label.unsqueeze(1)
+
+        score,_,_ = model(X, A)
+        score = score.to(dtype=torch.float64)
+        loss = criterion(score, label)
+        Rmse, r = get_acc(score, label)
+
+    return score, loss, Rmse, r
+
+
+
+def get_acc(score, labels):
+    score = score.cpu().data.numpy().squeeze()
+    labels = labels.cpu().data.numpy().squeeze()
+
+    Rmse = np.sqrt(np.mean((score - labels) ** 2))
+    pearson_coefficient, p_value = pearsonr(score, labels)
+    return Rmse, pearson_coefficient
+
+def signal_predict(X,A,model_path,model):
+    model.load_state_dict(torch.load(model_path))
+
+    model.eval()
+    signal = model(X, A)
+    return signal
+
+def fold_training(model,criterion,train_loader,test_loader,train_size):
+    min_rmse = 80
+    max_r = 0
+    no_improve_epoch = 0
+    n_iter = 0
+    best_epoch = 0
+    train_losses = []
+    test_losses = []
+    for epoch in range(400):
+        model_solver.zero_grad()
+
+        print("\ntraining.............")
+        model.train()
+        start_time = time.time()
+        train_rmse = 0
+        train_r = 0
+        train_loss = 0
+        for i, sample_batched in enumerate(train_loader):
+
+            score, loss, rmse ,r = model_foreward(sample_batched, model, criterion)
+
+            model.zero_grad()
+            loss.backward()
+            model_solver.step()
+
+            train_rmse += rmse
+            train_r += r
+            train_loss += loss
+
+            del score, loss, rmse, r
+            torch.cuda.empty_cache()
+
+        train_rmse /= float(i + 1)
+        train_r /= float(i + 1)
+        train_loss /= float(i + 1)
+
+        print("*** SHREC  Epoch: [%2d] time: %4.4f, "
+              "cls_loss: %.4f  train_RMSE: %.6f ***  train_r: %.6f ***"
+              % (epoch + 1, time.time() - start_time,
+                 train_loss, train_rmse,train_r))
+        start_time = time.time()
+
+        # ***********evaluation***********
+        with torch.no_grad():
+            val_loss = 0
+            acc_sum = 0
+            model.eval()
+            for i, sample_batched in enumerate(test_loader):
+                label = sample_batched["pA"]
+                score, loss, rmse ,r = model_foreward(sample_batched, model, criterion)
+                val_loss += loss
+
+                if i == 0:
+                    score_list = score
+                    label_list = label
+                else:
+                    score_list = torch.cat((score_list, score), 0)
+                    label_list = torch.cat((label_list, label), 0)
+
+            test_loss = val_loss / float(i + 1)
+            test_rmse,test_r = get_acc(score_list, label_list)
+
+            test_losses.append(test_loss)
+
+            print("*** SHREC  Epoch: [%2d], "
+                  "val_loss: %.6f,"
+                  "val_RMSE: %.6f ***"
+                  "val_r: %.6f ***"
+                  % (epoch + 1, test_loss, test_rmse,test_r))
+
+            # save best model
+            if test_rmse < min_rmse:
+                min_rmse = test_rmse
+                max_r = test_r
+                no_improve_epoch = 0
+                test_rmse = round(test_rmse, 10)
+
+                torch.save(model.state_dict(),
+                           '{}/epoch_{}_train_size_{}_rmse{}.pth'.format(model_fold, epoch + 1, train_size,min_rmse))
+                print("performance improve, saved the new model......best rmse: {}".format(min_rmse))
+                best_epoch = epoch + 1
+            else:
+                no_improve_epoch += 1
+                print("no_improve_epoch: {} best rmse {} best r {}".format(no_improve_epoch, min_rmse,max_r))
+
+            if no_improve_epoch > 15:
+                print("stop training....")
+                break
+
+            torch.cuda.empty_cache()
+
+        torch.cuda.empty_cache()
+
+    model_path = '{}/epoch_{}_train_size_{}_rmse{}.pth'.format(model_fold, best_epoch, train_size,min_rmse)
+    model.load_state_dict(torch.load(model_path))
+    print('load best model success')
+
+    return model,train_losses,test_losses
+
+
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
+if __name__ == "__main__":
+
+
+
+
+    # .........inital
+    print("\ninit.............")
+    #........inital data and training
+    model_fold = "/train_modified_kmer"
+    local_out = '/result/'
+    out = 'model_weight.npy'
+    fn = '/data1/zjt/desktop/ST_GCN_changeGCN (main)/ont_models/r9.4_180mv_450bps_6mer_DNA.model'
+    kmer_list, pA_list, labels = kmer_parser(fn)
+    all_bases = ''.join(list(kmer_list))
+
+
+    cv_res = {}
+
+    for test_size, kmer_train_mat, kmer_test_mat, pA_train_mat, pA_test_mat in cv_folds(kmer_list, pA_list,
+                                                                                        folds=5,
+                                                                                        test_sizes=[0.1,0.3,0.5,0.7,0.9],
+                                                                                        labels=labels):
+
+
+        train_size = 1 - test_size
+
+        key = str(round(train_size, 2)) + '-' + str(round(test_size, 2))
+        print('the fold key:{}'.format(key))
+        cv_res[key] = {'r_train': [], 'r_test': [], 'rmse_train': [], 'rmse_test': [],'train_losses': [], 'test_losses':[]}
+
+        for i in range(kmer_train_mat.shape[0]):
+            kmer_train_data = {}
+            kmer_test_data = {}
+
+            kmer_train = kmer_train_mat[i]
+            kmer_test = kmer_test_mat[i]
+            pA_train = pA_train_mat[i]
+            pA_test = pA_test_mat[i]
+
+            A_train, X_train = kmer_chemistry.get_AX(kmer_train)
+            A_test, X_test = kmer_chemistry.get_AX(kmer_test)
+            X_train = torch.tensor(X_train, dtype=torch.float32)
+            X_test = torch.tensor(X_test, dtype=torch.float32)
+            A_train = torch.tensor(A_train, dtype=torch.float32)
+            A_test = torch.tensor(A_test, dtype=torch.float32)
+
+            for j in range(A_train.shape[0]):
+                kmer_train_data[j] = {'X': X_train[j], 'A': A_train[j], 'pA': pA_train[j]}
+            for j in range(A_test.shape[0]):
+                kmer_test_data[j] = {'X': X_test[j], 'A': A_test[j], 'pA': pA_test[j]}
+
+            train_loader = torch.utils.data.DataLoader(kmer_train_data, batch_size=32, shuffle=True,
+                                                       num_workers=8, pin_memory=False)
+
+            test_loader = torch.utils.data.DataLoader(kmer_test_data, batch_size=32, shuffle=True,
+                                                      num_workers=8, pin_memory=False)
+
+            model,model_solver,criterion = init()
+
+            model,train_losses,test_losses = fold_training(model,criterion,train_loader,test_loader,train_size)
+
+            train_score, train_loss, train_rmse, train_r = model_predict(X_train,A_train,pA_train, model, criterion)
+            test_score, test_loss, test_rmse, test_r = model_predict(X_test,A_test,pA_test, model, criterion)
+
+            cv_res[key]['r_train'] += [train_r]
+            cv_res[key]['r_test'] += [test_r]
+
+            cv_res[key]['rmse_train'] += [train_rmse]
+            cv_res[key]['rmse_test'] += [test_rmse]
+
+            print(f'finished with average results:')
+            print(f'nomod r: {test_r:.4f}, mod r: {test_r:.4f}')
+            print(f'nomod RMSE: {test_rmse:.4f}, mod RMSE: {test_rmse:.4f}')
+
+            print(f"Fold {i} complete, saving...")
+
+            fold_file = f"{local_out + out}_fold_{i}_train_size_{round(train_size, 2)}_test_size_{round(test_size, 2)}.npy"
+
+            np.save(fold_file, cv_res[key])
+
+            print(f"Fold {i} saved to {fold_file}")
+
+            # clear_gpu_memory()
+            gc.collect()
+            torch.cuda.empty_cache()
+
+    np.save(local_out + out, cv_res)
+    print('save success')
+
+
+
+
+
+
+
+'''
+    # parameters recording training log
+    min_rmse = 2
+    max_r = 0
+    no_improve_epoch = 0
+    n_iter = 0
+
+    # ***********training#***********
+    for epoch in range(1000):
+        print("\ntraining.............")
+        model.train()
+        start_time = time.time()
+        train_rmse = 0
+        train_r = 0
+        train_loss = 0
+        for i, sample_batched in enumerate(train_loader):
+            #n_iter += 1
+            # print("training i:",i)
+            #if i + 1 > iter_per_epoch:
+                #continue
+            score, loss, rmse ,r = model_foreward(sample_batched, model, criterion)
+            #print('success')
+
+            model.zero_grad()
+
+            loss.backward()
+            # clip_grad_norm_(model.parameters(), 0.1)
+            model_solver.step()
+
+            train_rmse += rmse
+            train_r += r
+            train_loss += loss
+
+            # print(i)
+
+        train_rmse /= float(i + 1)
+        train_r /= float(i + 1)
+        train_loss /= float(i + 1)
+
+        print("*** SHREC  Epoch: [%2d] time: %4.4f, "
+              "cls_loss: %.4f  train_RMSE: %.6f ***  train_r: %.6f ***"
+              % (epoch + 1, time.time() - start_time,
+                 train_loss.data, train_rmse,train_r))
+        start_time = time.time()
+
+        # adjust_learning_rate(model_solver, epoch + 1, args)
+        # print(print(model.module.encoder.gcn_network[0].edg_weight))
+
+        # ***********evaluation***********
+        with torch.no_grad():
+            val_loss = 0
+            acc_sum = 0
+            model.eval()
+            for i, sample_batched in enumerate(test_loader):
+                # print("testing i:", i)
+                label = sample_batched["pA"]
+                score, loss, rmse ,r = model_foreward(sample_batched, model, criterion)
+                val_loss += loss
+
+                if i == 0:
+                    score_list = score
+                    label_list = label
+                else:
+                    score_list = torch.cat((score_list, score), 0)
+                    label_list = torch.cat((label_list, label), 0)
+
+            val_loss = val_loss / float(i + 1)
+            rmse,r = get_acc(score_list, label_list)
+
+            print("*** SHREC  Epoch: [%2d], "
+                  "val_loss: %.6f,"
+                  "val_RMSE: %.6f ***"
+                  "val_r: %.6f ***"
+                  % (epoch + 1, val_loss, rmse,r))
+
+            # save best model
+            if rmse < min_rmse:
+                min_rmse = rmse
+                max_r = r
+                no_improve_epoch = 0
+                # val_get_pic(score_list, label_list, val_cc)
+                rmse = round(rmse, 10)
+
+                #torch.save(model.state_dict(),
+                           #'{}/epoch_{}_acc_{}.pth'.format(model_fold, epoch + 1, val_cc))
+                #print("performance improve, saved the new model......best acc: {}".format(max_acc))
+            else:
+                no_improve_epoch += 1
+                print("no_improve_epoch: {} best rmse {} best r {}".format(no_improve_epoch, min_rmse,max_r))
+
+            if no_improve_epoch > 1000:
+                print("stop training....")
+                break
+'''
