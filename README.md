@@ -50,6 +50,7 @@ python kmer_models/pred_kmer_model.py
 ```
 
 The inference should take less 60 seconds on a typical desktop computer.
+
 ### Tools for Downstream Analysis
-Downstream analyses use [Squigulator](https://github.com/nanoporetech/squigulator), [Clair3](https://github.com/HKU-BAL/Clair3), [f5c](https://github.com/nanoporetech/f5c), and [DeepSME](https://github.com/sparkcyf/DeepSME).
+Downstream analyses use [Squigulator](https://github.com/nanoporetech/squigulator), [Clair3](https://github.com/HKU-BAL/Clair3), [RTG-ToolS](https://github.com/RealTimeGenomics/rtg-tools), [f5c](https://github.com/nanoporetech/f5c), and [DeepSME](https://github.com/sparkcyf/DeepSME).
 You can follow their respective instructions to perform downstream tasks using the predicted k-mer models.
