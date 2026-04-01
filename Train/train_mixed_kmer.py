@@ -5,9 +5,10 @@ import torch
 import numpy as np
 import torch.optim as optim
 import time
-import argparse
+from rdkit import RDLogger
+RDLogger.DisableLog('rdApp.warning')
 import gc
-from numpy.distutils.fcompiler import str2bool
+
 from model.ST_GCN_AltFormer import ST_GCN_AltFormer
 from dataset.utils import kmer_parser,cv_folds
 from dataset import kmer_chemistry

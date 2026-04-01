@@ -4,18 +4,19 @@ import torch
 
 import torch.optim as optim
 import time
-import argparse
+from rdkit import RDLogger
+RDLogger.DisableLog('rdApp.warning')
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-# from model.Net import *
+
 import numpy as np
-from numpy.distutils.fcompiler import str2bool
+
 
 from model.ST_GCN_AltFormer import ST_GCN_AltFormer
 from dataset.utils import kmer_parser,cv_folds
 from dataset import kmer_chemistry
-#from dataset_node import *
+
 from scipy.stats import pearsonr
 
 
