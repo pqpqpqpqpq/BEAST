@@ -5,7 +5,9 @@ import torch
 import torch.optim as optim
 import time
 import argparse
+import sys
 import os
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 # from model.Net import *
 import numpy as np
 from numpy.distutils.fcompiler import str2bool
@@ -190,10 +192,13 @@ if __name__ == "__main__":
     # .........inital
     print("\ninit.............")
     #........inital data and training
-    model_fold = "/train_modified_kmer"
-    local_out = '/result/'
+    model_fold = "../train_modified_kmer"
+    local_out = '../train_modified_kmer/result'
+
+    os.makedirs(model_fold, exist_ok=True)
+    os.makedirs(local_out, exist_ok=True)
     out = 'model_weight.npy'
-    fn = '/data1/zjt/desktop/ST_GCN_changeGCN (main)/ont_models/r9.4_180mv_450bps_6mer_DNA.model'
+    fn = '../kmer_models/Canonical.model'
     kmer_list, pA_list, labels = kmer_parser(fn)
     all_bases = ''.join(list(kmer_list))
 
@@ -202,7 +207,7 @@ if __name__ == "__main__":
 
     for test_size, kmer_train_mat, kmer_test_mat, pA_train_mat, pA_test_mat in cv_folds(kmer_list, pA_list,
                                                                                         folds=5,
-                                                                                        test_sizes=[0.1,0.3,0.5,0.7,0.9],
+                                                                                        test_sizes=[0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9],
                                                                                         labels=labels):
 
 
@@ -271,103 +276,3 @@ if __name__ == "__main__":
     np.save(local_out + out, cv_res)
     print('save success')
 
-
-
-
-
-
-
-'''
-    # parameters recording training log
-    min_rmse = 2
-    max_r = 0
-    no_improve_epoch = 0
-    n_iter = 0
-
-    # ***********training#***********
-    for epoch in range(1000):
-        print("\ntraining.............")
-        model.train()
-        start_time = time.time()
-        train_rmse = 0
-        train_r = 0
-        train_loss = 0
-        for i, sample_batched in enumerate(train_loader):
-            #n_iter += 1
-            # print("training i:",i)
-            #if i + 1 > iter_per_epoch:
-                #continue
-            score, loss, rmse ,r = model_foreward(sample_batched, model, criterion)
-            #print('success')
-
-            model.zero_grad()
-
-            loss.backward()
-            # clip_grad_norm_(model.parameters(), 0.1)
-            model_solver.step()
-
-            train_rmse += rmse
-            train_r += r
-            train_loss += loss
-
-            # print(i)
-
-        train_rmse /= float(i + 1)
-        train_r /= float(i + 1)
-        train_loss /= float(i + 1)
-
-        print("*** SHREC  Epoch: [%2d] time: %4.4f, "
-              "cls_loss: %.4f  train_RMSE: %.6f ***  train_r: %.6f ***"
-              % (epoch + 1, time.time() - start_time,
-                 train_loss.data, train_rmse,train_r))
-        start_time = time.time()
-
-        # adjust_learning_rate(model_solver, epoch + 1, args)
-        # print(print(model.module.encoder.gcn_network[0].edg_weight))
-
-        # ***********evaluation***********
-        with torch.no_grad():
-            val_loss = 0
-            acc_sum = 0
-            model.eval()
-            for i, sample_batched in enumerate(test_loader):
-                # print("testing i:", i)
-                label = sample_batched["pA"]
-                score, loss, rmse ,r = model_foreward(sample_batched, model, criterion)
-                val_loss += loss
-
-                if i == 0:
-                    score_list = score
-                    label_list = label
-                else:
-                    score_list = torch.cat((score_list, score), 0)
-                    label_list = torch.cat((label_list, label), 0)
-
-            val_loss = val_loss / float(i + 1)
-            rmse,r = get_acc(score_list, label_list)
-
-            print("*** SHREC  Epoch: [%2d], "
-                  "val_loss: %.6f,"
-                  "val_RMSE: %.6f ***"
-                  "val_r: %.6f ***"
-                  % (epoch + 1, val_loss, rmse,r))
-
-            # save best model
-            if rmse < min_rmse:
-                min_rmse = rmse
-                max_r = r
-                no_improve_epoch = 0
-                # val_get_pic(score_list, label_list, val_cc)
-                rmse = round(rmse, 10)
-
-                #torch.save(model.state_dict(),
-                           #'{}/epoch_{}_acc_{}.pth'.format(model_fold, epoch + 1, val_cc))
-                #print("performance improve, saved the new model......best acc: {}".format(max_acc))
-            else:
-                no_improve_epoch += 1
-                print("no_improve_epoch: {} best rmse {} best r {}".format(no_improve_epoch, min_rmse,max_r))
-
-            if no_improve_epoch > 1000:
-                print("stop training....")
-                break
-'''

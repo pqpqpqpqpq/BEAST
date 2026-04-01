@@ -1,3 +1,6 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 import torch
 import numpy as np
 import torch.optim as optim
@@ -180,18 +183,22 @@ if __name__ == "__main__":
     # .........inital
     print("\ninit.............")
     #........inital data and training
+    # ........inital data and training
     model_fold = "../train_mixed_kmer"
-    local_out = '/result/'
+    local_out = '../train_mixed_kmer/result/'
+
+    os.makedirs(model_fold, exist_ok=True)
+    os.makedirs(local_out, exist_ok=True)
     out = 'model_weight.npy'
-    fn = '../ont_models/r9.4_180mv_450bps_6mer_DNA.model'
-    fn_M = '../ont_models/r9.4_450bps.cpg.m.only.6mer.template.model'
+    fn = '../kmer_models/Canonical.model'
+    fn_M = '../kmer_models/5mC_OnlyM.model'
     kmer_list, pA_train, labels = kmer_parser(fn)
     all_bases = ''.join(list(kmer_list))
     kmer_M_list, pA_test, _ = kmer_parser(fn_M)
 
     res_dict = {}
 
-    train_splits = [0.1,0.3,0.5,0.7,0.9]
+    train_splits = [0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9]
 
     for train_split in train_splits:
         key = str(round(train_split, 2))
