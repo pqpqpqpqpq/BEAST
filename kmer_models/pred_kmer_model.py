@@ -1,7 +1,9 @@
 import os
 import torch
 import pandas as pd
-
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from dataset import kmer_chemistry
 from dataset.utils import kmer_parser
@@ -23,7 +25,7 @@ def init_model():
     return model
 
 
-def replace_level_mean(model_path, new_level_means, output_path='/pred.model'):
+def replace_level_mean(model_path, new_level_means, output_path='../pred.model'):
     comment_lines = []
     data_lines = []
 
@@ -59,9 +61,9 @@ def replace_level_mean(model_path, new_level_means, output_path='/pred.model'):
 
 def main():
 
-    model_weight_path = '../Canonical_BEAST.pth'
-    kmer_model_file = '../r9.4_450bps.nucleotide.6mer.template.model'   # Read the template
-    fn = '../r9.4_180mv_450bps_6mer_DNA.model'   # Read kmer
+    model_weight_path = '../10% model weight/Canonical/Canonical_BEAST.pth'
+    kmer_model_file = '../kmer_models/r9.4_450bps.nucleotide.6mer.template.model'   # Read the template
+    fn = '../kmer_models/Canonical.model'   # Read kmer
 
 
     model = init_model()
