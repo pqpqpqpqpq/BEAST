@@ -28,7 +28,7 @@ cd BEAST
 pip install -r requirements.txt
 ```
 
-The installation should take less than 10 minutes on a typical desktop pc. Finally, a .model file containing k-mers and information about the horizontal current will be output.
+The installation should take less than 10 minutes on a typical desktop pc. The final output is a .model file containing k-mers and their corresponding current levels.
 
 ### Training
 1. Prepare the k-mer data samples that you want to predict.

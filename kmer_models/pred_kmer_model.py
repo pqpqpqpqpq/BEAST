@@ -59,7 +59,7 @@ def replace_level_mean(model_path, new_level_means, output_path='/pred.model'):
 
 def main():
 
-    model_weight_path = '/epoch_138_train_size_0.3_fold0_rmse0.5678281031594038.pth'
+    model_weight_path = '../Canonical_BEAST.pth'
     kmer_model_file = '../r9.4_450bps.nucleotide.6mer.template.model'   # Read the template
     fn = '../r9.4_180mv_450bps_6mer_DNA.model'   # Read kmer
 
