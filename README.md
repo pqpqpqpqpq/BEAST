@@ -1,6 +1,6 @@
 # BEAST: A Graph-based Transformer Framework for Generalizable Nanopore Signal Modeling under Data Scarcity
 
-This repository contains the PyTorch implementation of [BEAST: A Graph-based Transformer Framework for Generalizable Nanopore Signal Modeling under Data Scarcity] Jiayao Hu, Jintao Zhu, Xuyang Zhao, Qingyuan Fan, Junyao Li, Luping Fang, Qing Pan,and Yi Li.
+This repository contains the PyTorch implementation of [Data-efficient and Interpretable Nanopore Signal Prediction via Base-resolved Mapping of Atomic-level Spatio-temporal Translocation Dynamics (BEAST)] Jiayao Hu, Jintao Zhu, Xuyang Zhao, Qingyuan Fan, Junyao Li, Luping Fang, Qing Pan,and Yi Li.
 
 ---
 
@@ -27,6 +27,9 @@ git clone https://github.com/pqpqpqpqpq/BEAST.git
 cd BEAST
 pip install -r requirements.txt
 ```
+
+The installation should take less than 10 minutes on a typical desktop pc. Finally, a .model file containing k-mers and information about the horizontal current will be output.
+
 ### Training
 1. Prepare the k-mer data samples that you want to predict.
 If your k-mer contains modified bases, use the following letters to represent them:
@@ -45,6 +48,8 @@ python Train/train_mixed_kmer.py   # Train on a mixed k-mer model
 ```bash
 python kmer_models/pred_kmer_model.py
 ```
+
+The inference should take less 60 seconds on a typical desktop computer.
 ### Tools for Downstream Analysis
 Downstream analyses use [Squigulator](https://github.com/nanoporetech/squigulator), [Clair3](https://github.com/HKU-BAL/Clair3), [f5c](https://github.com/nanoporetech/f5c), and [DeepSME](https://github.com/sparkcyf/DeepSME).
 You can follow their respective instructions to perform downstream tasks using the predicted k-mer models.
