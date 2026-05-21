@@ -3,7 +3,10 @@ import torch
 import pandas as pd
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+from pathlib import Path
+project_root = Path(__file__).resolve().parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 from dataset import kmer_chemistry
 from dataset.utils import kmer_parser
