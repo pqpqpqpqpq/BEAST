@@ -81,7 +81,7 @@ Exports trained BEAST model weights under different modification mixture proport
 
 ---
 
-### 3.Predict k-mer Models Using BEAST
+## Predict k-mer Models Using BEAST
 
 ```bash
 python pred_kmer_model.py \
