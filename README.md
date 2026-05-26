@@ -30,9 +30,9 @@ pip install -r requirements.txt
 
 The installation should take less than 10 minutes on a typical desktop pc. The final output is a .model file containing k-mers and their corresponding current levels.
 
-### Training
+## Training
 
-#### 1. Prepare k-mer Data
+### 1. Prepare k-mer Data
 Prepare the k-mer samples used for training or prediction.
 
 For modified bases, use the following symbols:
@@ -44,18 +44,15 @@ For modified bases, use the following symbols:
 
 ---
 
-#### 2. Run Training Scripts
+### 2. Run Training Scripts
 
 ```bash
 python Train/train_fixed_kmer.py   # Train on a single k-mer model
 python Train/train_mixed_kmer.py   # Train on mixed k-mer models
 ```
 
----
 
-## Detailed Training Mechanism
-
-### Single k-mer Model Training (`train_fixed_kmer.py`)
+#### Single k-mer Model Training (`train_fixed_kmer.py`)
 
 **Description**  
 Train the BEAST model using a single k-mer model.
@@ -66,9 +63,8 @@ The script progressively downsamples the input k-mer model samples from 10% to 9
 **Output**  
 Exports trained BEAST model weights for each sampling ratio.
 
----
 
-### Mixed k-mer Model Training (`train_mixed_kmer.py`)
+#### Mixed k-mer Model Training (`train_mixed_kmer.py`)
 
 **Description**  
 Train the BEAST model using two different k-mer models simultaneously.
@@ -85,7 +81,7 @@ Exports trained BEAST model weights under different modification mixture proport
 
 ---
 
-## Predict k-mer Models Using BEAST
+### 3.Predict k-mer Models Using BEAST
 
 ```bash
 python pred_kmer_model.py \
@@ -97,15 +93,13 @@ python pred_kmer_model.py \
 
 This step performs BEAST inference to predict k-mer-level mean values.
 
----
 
-### Performance
+#### Performance
 
 - Inference typically finishes in **less than 60 seconds** on a standard desktop computer.
 
----
 
-### Input Arguments
+#### Input Arguments
 
 - `--model-weight`：Path to the trained BEAST model weights (`.pth`).
 
