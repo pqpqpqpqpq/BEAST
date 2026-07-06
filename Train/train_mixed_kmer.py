@@ -195,10 +195,10 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='BEAST mixed k-mer model training (Canonical + Modified)')
 
-    parser.add_argument('--fn', type=str, default='../kmer_models/Canonical.model',
-                        help='Path to the Canonical k-mer model file (default: ../kmer_models/Canonical.model)')
-    parser.add_argument('--fn_M', type=str, default='../kmer_models/5mC_OnlyM.model',
-                        help='Path to the Modified k-mer model file (default: ../kmer_models/5mC_OnlyM.model)')
+    parser.add_argument('--fn', type=str, default='./kmer_models/Canonical.model',
+                        help='Path to the Canonical k-mer model file (default: ./kmer_models/Canonical.model)')
+    parser.add_argument('--fn_M', type=str, default='./kmer_models/5mC_OnlyM.model',
+                        help='Path to the Modified k-mer model file (default: ./kmer_models/5mC_OnlyM.model)')
     parser.add_argument('--model_fold', type=str, default='../train_mixed_kmer',
                         help='Directory to save model weights (default: ../train_mixed_kmer)')
     parser.add_argument('--result_fold', type=str, default='../train_mixed_kmer/result',

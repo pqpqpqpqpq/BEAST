@@ -80,15 +80,16 @@ Exports trained BEAST model weights for each sampling ratio.
 ```bash
 # Use custom k-mer file and save results to custom directory
 python Train/train_fixed_kmer.py \
-    --fn ../kmer_models/5mC_full.model \
+    --fn ./kmer_models/5mC_full.model \
     --model_fold ./output/weights \
-    --result_fold ./output/results
+    --result_fold ./output/results \
+    --device 0
 
 # Run on CPU
 python Train/train_fixed_kmer.py --device cpu
 
-# Run on GPU 1
-python Train/train_fixed_kmer.py --device 1
+# Run on GPU 0
+python Train/train_fixed_kmer.py --device 0
 ```
 
 
@@ -111,7 +112,7 @@ Exports trained BEAST model weights under different modification mixture proport
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `--fn` | `../kmer_models/Canonical.model` | Path to the Canonical k-mer model file |
+| `--fn` | `./kmer_models/Canonical.model` | Path to the Canonical k-mer model file |
 | `--fn_M` | `../kmer_models/5mC_OnlyM.model` | Path to the Modified k-mer model file |
 | `--model_fold` | `../train_mixed_kmer` | Directory to save model weights |
 | `--result_fold` | `../train_mixed_kmer/result` | Directory to save CV results |
@@ -125,10 +126,14 @@ python Train/train_mixed_kmer.py \
     --fn ../kmer_models/Canonical.model \
     --fn_M ../kmer_models/5hmC_OnlyK.model \
     --model_fold ./output/weights \
-    --result_fold ./output/results
+    --result_fold ./output/results \
+    --device 0
 
 # Run on CPU
 python Train/train_mixed_kmer.py --device cpu
+
+# Run on GPU 0
+python Train/train_mixed_kmer.py --device 0
 ```
 
 ---
