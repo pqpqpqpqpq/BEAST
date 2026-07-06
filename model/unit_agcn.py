@@ -78,7 +78,7 @@ class unit_agcn(nn.Module):
         N, C, T, V = x.size()
         PA = nn.Parameter(A)
         nn.init.constant_(PA, 1e-6)
-        A = A.cuda(x.get_device())
+        A = A.to(x.device, non_blocking=True)
         A = Variable(A, requires_grad=False)
         A = A + PA
 

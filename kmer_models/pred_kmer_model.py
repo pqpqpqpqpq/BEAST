@@ -13,19 +13,25 @@ from dataset import kmer_chemistry
 from dataset.utils import kmer_parser
 from model.ST_GCN_AltFormer import ST_GCN_AltFormer
 
+# 全局设备对象，在 main() 中根据 --device 初始化
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 
 def model_predict(X, A, model):
     model.eval()
     with torch.no_grad():
+        X = X.to(DEVICE)
+        A = A.to(DEVICE)
         score, _, _ = model(X, A)
         score = score.to(dtype=torch.float64)
     return score
 
 
 def init_model():
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
     model = ST_GCN_AltFormer(channel=8, backbone_in_c=128, num_frame=6, num_joints=22, style='ST')
-    model = torch.nn.DataParallel(model).cuda()
+    if DEVICE.type == 'cuda':
+        model = torch.nn.DataParallel(model)
+    model = model.to(DEVICE)
     return model
 
 
@@ -77,10 +83,23 @@ def main():
     parser.add_argument('--output-path', type=str, default='../pred.model',
                         help='Path to save the predicted output model (default: ../pred.model).')
 
+    parser.add_argument('--device', type=str, default='0',
+                        help='GPU device index (e.g. 0, 1) or "cpu" (default: 0).')
+
     args = parser.parse_args()
 
+    # ---------- device setup ----------
+    global DEVICE
+    if args.device.lower() == 'cpu':
+        DEVICE = torch.device('cpu')
+    else:
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(args.device)
+        DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    print(f"Using device: {DEVICE}")
+
     model = init_model()
-    model.load_state_dict(torch.load(args.model_weight))
+    model.load_state_dict(torch.load(args.model_weight, map_location=DEVICE))
 
     kmer_list, _, _ = kmer_parser(args.fn)
     A_train, X_train = kmer_chemistry.get_AX(kmer_list, n_type='DNA', return_smiles=False)

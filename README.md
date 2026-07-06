@@ -47,8 +47,11 @@ For modified bases, use the following symbols:
 ### 2. Run Training Scripts
 
 ```bash
-python Train/train_fixed_kmer.py   # Train on a single k-mer model
-python Train/train_mixed_kmer.py   # Train on mixed k-mer models
+# Single k-mer model training (with defaults)
+python Train/train_fixed_kmer.py
+
+# Mixed k-mer model training (with defaults)
+python Train/train_mixed_kmer.py
 ```
 
 
@@ -62,6 +65,31 @@ The script progressively downsamples the input k-mer model samples from 10% to 9
 
 **Output**  
 Exports trained BEAST model weights for each sampling ratio.
+
+**Command-line Arguments**
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--fn` | `../kmer_models/Canonical.model` | Path to the k-mer model file |
+| `--model_fold` | `../train_modified_kmer` | Directory to save model weights |
+| `--result_fold` | `../train_modified_kmer/result` | Directory to save CV results |
+| `--device` | `0` | GPU device index (e.g. `0`, `1`) or `cpu` |
+
+**Examples**
+
+```bash
+# Use custom k-mer file and save results to custom directory
+python Train/train_fixed_kmer.py \
+    --fn ../kmer_models/5mC_full.model \
+    --model_fold ./output/weights \
+    --result_fold ./output/results
+
+# Run on CPU
+python Train/train_fixed_kmer.py --device cpu
+
+# Run on GPU 1
+python Train/train_fixed_kmer.py --device 1
+```
 
 
 #### Mixed k-mer Model Training (`train_mixed_kmer.py`)
@@ -79,16 +107,41 @@ The Canonical k-mer model is always fully retained, while the Modified k-mer mod
 **Output**  
 Exports trained BEAST model weights under different modification mixture proportions.
 
+**Command-line Arguments**
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--fn` | `../kmer_models/Canonical.model` | Path to the Canonical k-mer model file |
+| `--fn_M` | `../kmer_models/5mC_OnlyM.model` | Path to the Modified k-mer model file |
+| `--model_fold` | `../train_mixed_kmer` | Directory to save model weights |
+| `--result_fold` | `../train_mixed_kmer/result` | Directory to save CV results |
+| `--device` | `0` | GPU device index (e.g. `0`, `1`) or `cpu` |
+
+**Examples**
+
+```bash
+# Use custom modified model and save to custom directory
+python Train/train_mixed_kmer.py \
+    --fn ../kmer_models/Canonical.model \
+    --fn_M ../kmer_models/5hmC_OnlyK.model \
+    --model_fold ./output/weights \
+    --result_fold ./output/results
+
+# Run on CPU
+python Train/train_mixed_kmer.py --device cpu
+```
+
 ---
 
 ## Predict k-mer Models Using BEAST
 
 ```bash
-python pred_kmer_model.py \
+python kmer_models/pred_kmer_model.py \
     --model-weight ../10%_model_weight/Canonical/Canonical_BEAST.pth \
     --kmer-model-file r9.4_450bps.nucleotide.6mer.template.model \
     --fn Canonical.model \
-    --output-path ../output_results/pred.model
+    --output-path ../output_results/pred.model \
+    --device 0
 ```
 
 This step performs BEAST inference to predict k-mer-level mean values.
@@ -101,13 +154,13 @@ This step performs BEAST inference to predict k-mer-level mean values.
 
 #### Input Arguments
 
-- `--model-weight`：Path to the trained BEAST model weights (`.pth`).
-
-- `--kmer-model-file`：Path to the template k-mer model file.
-
-- `--fn`：Path to the input k-mer model file.
-
-- `--output-path`：Path to save the predicted model. Default: `../pred.model`.
+| Argument | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `--model-weight` | Yes | — | Path to the trained BEAST model weights (`.pth`) |
+| `--kmer-model-file` | Yes | — | Path to the template k-mer model file |
+| `--fn` | Yes | — | Path to the input k-mer model file |
+| `--output-path` | No | `../pred.model` | Path to save the predicted model |
+| `--device` | No | `0` | GPU device index (e.g. `0`, `1`) or `cpu` |
 
 ---
 

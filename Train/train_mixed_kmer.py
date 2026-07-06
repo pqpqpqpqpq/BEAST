@@ -1,5 +1,6 @@
 import sys
 import os
+import argparse
 from pathlib import Path
 project_root = Path(__file__).resolve().parent.parent
 if str(project_root) not in sys.path:
@@ -18,6 +19,9 @@ from dataset import kmer_chemistry
 from scipy.stats import pearsonr
 from sklearn.model_selection import ShuffleSplit
 
+# 全局设备对象，在 __main__ 中根据 --device 初始化
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 
 def init():
 
@@ -29,17 +33,18 @@ def init():
 def init_model():
 
     model = ST_GCN_AltFormer(channel=8, backbone_in_c=128, num_frame=6, num_joints=22, style='ST')
-    model = torch.nn.DataParallel(model).cuda()
+    if DEVICE.type == 'cuda':
+        model = torch.nn.DataParallel(model)
+    model = model.to(DEVICE)
 
     return model
 
 
 def model_foreward(sample_batched, model,criterion):
 
-    data = sample_batched['X'].float()
-    A_batched = sample_batched['A'].float()
-    label = sample_batched['pA']
-    label = label.cuda()
+    data = sample_batched['X'].float().to(DEVICE)
+    A_batched = sample_batched['A'].float().to(DEVICE)
+    label = sample_batched['pA'].to(DEVICE)
     label = torch.autograd.Variable(label, requires_grad=False)
     label = label.unsqueeze(1)
 
@@ -52,7 +57,9 @@ def model_foreward(sample_batched, model,criterion):
 def model_predict(X,A,pA,model,criterion):
     model.eval()
     with torch.no_grad():
-        label = torch.tensor(pA).float().cuda()
+        X = X.to(DEVICE)
+        A = A.to(DEVICE)
+        label = torch.tensor(pA).float().to(DEVICE)
         label = torch.autograd.Variable(label, requires_grad=False)
         label = label.unsqueeze(1)
 
@@ -102,7 +109,8 @@ def fold_training(model,criterion,train_loader,test_loader,train_split):
             train_loss += loss
 
             del score, loss, rmse, r
-            torch.cuda.empty_cache()
+            if DEVICE.type == 'cuda':
+                torch.cuda.empty_cache()
 
         train_rmse /= float(i + 1)
         train_r /= float(i + 1)
@@ -133,7 +141,8 @@ def fold_training(model,criterion,train_loader,test_loader,train_split):
                     label_list = torch.cat((label_list, label), 0)
 
                 del score, loss, rmse, r
-                torch.cuda.empty_cache()
+                if DEVICE.type == 'cuda':
+                    torch.cuda.empty_cache()
 
             test_loss = val_loss / float(i + 1)
             test_rmse,test_r = get_acc(score_list, label_list)
@@ -164,12 +173,14 @@ def fold_training(model,criterion,train_loader,test_loader,train_split):
             print("stop training....")
             break
 
+        if DEVICE.type == 'cuda':
+            torch.cuda.empty_cache()
+
+    if DEVICE.type == 'cuda':
         torch.cuda.empty_cache()
 
-    torch.cuda.empty_cache()
-
     model_path = '{}/epoch_{}_rmse{}_train_split{}.pth'.format(model_fold, best_epoch,min_rmse,train_split)
-    model.load_state_dict(torch.load(model_path))
+    model.load_state_dict(torch.load(model_path, map_location=DEVICE))
     print('load best model success')
 
     return model,train_losses,test_losses
@@ -182,20 +193,42 @@ torch.backends.cudnn.benchmark = False
 
 if __name__ == "__main__":
 
-    print("\ndna_mod_pred......")
+    parser = argparse.ArgumentParser(description='BEAST mixed k-mer model training (Canonical + Modified)')
+
+    parser.add_argument('--fn', type=str, default='../kmer_models/Canonical.model',
+                        help='Path to the Canonical k-mer model file (default: ../kmer_models/Canonical.model)')
+    parser.add_argument('--fn_M', type=str, default='../kmer_models/5mC_OnlyM.model',
+                        help='Path to the Modified k-mer model file (default: ../kmer_models/5mC_OnlyM.model)')
+    parser.add_argument('--model_fold', type=str, default='../train_mixed_kmer',
+                        help='Directory to save model weights (default: ../train_mixed_kmer)')
+    parser.add_argument('--result_fold', type=str, default='../train_mixed_kmer/result',
+                        help='Directory to save CV results (default: ../train_mixed_kmer/result)')
+    parser.add_argument('--device', type=str, default='0',
+                        help='GPU device index (e.g. 0, 1) or "cpu" (default: 0)')
+
+    args = parser.parse_args()
+
+    # ---------- device setup ----------
+    if args.device.lower() == 'cpu':
+        DEVICE = torch.device('cpu')
+    else:
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(args.device)
+        DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    print(f"\ndna_mod_pred...... (device: {DEVICE})")
 
     # .........inital
     print("\ninit.............")
     #........inital data and training
     # ........inital data and training
-    model_fold = "../train_mixed_kmer"
-    local_out = '../train_mixed_kmer/result/'
+    model_fold = args.model_fold
+    local_out = args.result_fold
 
     os.makedirs(model_fold, exist_ok=True)
     os.makedirs(local_out, exist_ok=True)
     out = 'model_weight.npy'
-    fn = '../kmer_models/Canonical.model'
-    fn_M = '../kmer_models/5mC_OnlyM.model'
+    fn = args.fn
+    fn_M = args.fn_M
     kmer_list, pA_train, labels = kmer_parser(fn)
     all_bases = ''.join(list(kmer_list))
     kmer_M_list, pA_test, _ = kmer_parser(fn_M)
@@ -275,7 +308,8 @@ if __name__ == "__main__":
             print(f'Train RMSE: {train_rmse:.4f}, Test RMSE: {test_rmse:.4f}')
 
             gc.collect()
-            torch.cuda.empty_cache()
+            if DEVICE.type == 'cuda':
+                torch.cuda.empty_cache()
 
         fold_file = f"{local_out + out}_5mC- {train_split}.npy"
         np.save(fold_file, res_dict)
