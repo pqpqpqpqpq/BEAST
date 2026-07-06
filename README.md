@@ -123,8 +123,8 @@ Exports trained BEAST model weights under different modification mixture proport
 ```bash
 # Use custom modified model and save to custom directory
 python Train/train_mixed_kmer.py \
-    --fn ../kmer_models/Canonical.model \
-    --fn_M ../kmer_models/5hmC_OnlyK.model \
+    --fn ./kmer_models/Canonical.model \
+    --fn_M ./kmer_models/5hmC_OnlyK.model \
     --model_fold ./output/weights \
     --result_fold ./output/results \
     --device 0
@@ -142,9 +142,9 @@ python Train/train_mixed_kmer.py --device 0
 
 ```bash
 python kmer_models/pred_kmer_model.py \
-    --model-weight ../10%_model_weight/Canonical/Canonical_BEAST.pth \
-    --kmer-model-file r9.4_450bps.nucleotide.6mer.template.model \
-    --fn Canonical.model \
+    --model-weight ./10%_model_weight/Canonical/Canonical_BEAST.pth \
+    --kmer-model-file ./kmer_models/r9.4_450bps.nucleotide.6mer.template.model \
+    --fn ./kmer_models/Canonical.model \
     --output-path ../output_results/pred.model \
     --device 0
 ```
