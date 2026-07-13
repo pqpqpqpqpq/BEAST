@@ -14,7 +14,7 @@ BEAST is an efficient spatio-temporal graph neural network for predicting nanopo
 
 ### Requirements
 - Python 3.8
-- PyTorch v2.0.1
+- PyTorch v2.4.1
 - Other dependencies listed in `requirements.txt`
 
 ### Setup
