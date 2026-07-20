@@ -149,7 +149,7 @@ python kmer_models/pred_kmer_model.py \
     --device 0
 ```
 
-This step performs BEAST inference to predict k-mer-level mean values.
+This step performs BEAST inference to predict k-mer-level mean values. Example output files are provided in `kmer_models/r9.4_450bps.nucleotide.6mer.template.model`
 
 
 #### Performance
