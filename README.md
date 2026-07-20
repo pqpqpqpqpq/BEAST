@@ -80,7 +80,7 @@ Exports trained BEAST model weights for each sampling ratio.
 ```bash
 # Use custom k-mer file and save results to custom directory
 python Train/train_fixed_kmer.py \
-    --fn ./kmer_models/5mC_full.model \
+    --fn ./kmer_models/Canonical.model \
     --model_fold ./output/weights \
     --result_fold ./output/results \
     --device 0
