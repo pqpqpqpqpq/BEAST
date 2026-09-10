@@ -109,11 +109,11 @@ def get_AX_matrix(smiles, Atms, nAtms, k):
 
 
     padded_A_mat = np.array(padded_A_mat)
-    padded_A_mat = padded_A_mat.reshape(len(padded_A_mat),k,22,22)
+    padded_A_mat = padded_A_mat.reshape(len(padded_A_mat),k,nAtms,nAtms)
 
     padded_X_mat = np.split(padded_X_mat, len(smiles), axis=0)
     padded_X_mat = np.array(padded_X_mat)
-    padded_X_mat = padded_X_mat.reshape(len(padded_X_mat), k, 22, 8)
+    padded_X_mat = padded_X_mat.reshape(len(padded_X_mat), k, nAtms, 8)
 
 
     return padded_A_mat, padded_X_mat
@@ -130,15 +130,31 @@ def get_AX(kmer_list, n_type="DNA", return_smiles=False):
                 "G": "OP(=O)(O)OCC1OC(N2C=NC3=C2N=C(N)NC3=O)CC1",
                 "C": "OP(=O)(O)OCC1OC(N2C(=O)N=C(N)C=C2)CC1",
                 "M": "OP(=O)(O)OCC1OC(N2C(=O)N=C(N)C(C)=C2)CC1",  # 5mC
-                "Q": "OP(=O)(O)OCC1OC(N3C=NC2=C(NC)N=CN=C23)CC1",  # 6mA
+                "Q": "OP(=O)(O)OCC1OC(N3C=NC2=C(NC)N=CN=C23)CC1",  # 6mA (legacy symbol)
+                "X": "OP(=O)(O)OCC1OC(N3C=NC2=C(NC)N=CN=C23)CC1",  # m6A
                 'K': "OP(=O)(O)OCC1OC(N2C(=O)N=C(N)C(CO)=C2)CC1"}  # 5hmC
 
-    if n_type == "DNA":
-        smiles = get_kmer_smiles(k, dna_base)
-        smiles = [smiles.get(kmer)[0] for kmer in kmer_list]
+    # RNA: ribose backbone (C(O)C1), U replaces T, X denotes m6A
+    rna_base = {"A": "OP(=O)(O)OCC1OC(N3C=NC2=C(N)N=CN=C23)C(O)C1",
+                "U": "OP(=O)(O)OCC1OC(N2C(=O)NC(=O)C=C2)C(O)C1",
+                "G": "OP(=O)(O)OCC1OC(N2C=NC3=C2N=C(N)NC3=O)C(O)C1",
+                "C": "OP(=O)(O)OCC1OC(N2C(=O)N=C(N)C=C2)C(O)C1",
+                "X": "OP(=O)(O)OCC1OC(N3C=NC2=C(NC)N=CN=C23)C(O)C1"}  # m6A
 
-        A, X = get_AX_matrix(smiles, ['C', 'N', 'O', 'P'], 22,k)
-        # A（133，133），X（133,8）
+    if n_type == "DNA":
+        base_map, n_atoms = dna_base, 22
+    elif n_type == "RNA":
+        base_map, n_atoms = rna_base, 23
+    else:
+        raise ValueError("n_type must be 'DNA' or 'RNA', got {!r}".format(n_type))
+
+    # only enumerate the letters actually present in this k-mer list
+    letters = set(''.join(kmer_list))
+    base_map = {b: s for b, s in base_map.items() if b in letters}
+    smiles = get_kmer_smiles(k, base_map)
+    smiles = [smiles.get(kmer)[0] for kmer in kmer_list]
+
+    A, X = get_AX_matrix(smiles, ['C', 'N', 'O', 'P'], n_atoms, k)
 
     if return_smiles:
         return A, X, smiles

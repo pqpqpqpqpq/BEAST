@@ -21,15 +21,21 @@ from model.ST_GCN_AltFormer import ST_GCN_AltFormer
 from dataset.utils import kmer_parser,cv_folds
 from dataset import kmer_chemistry
 
+from sklearn.model_selection import train_test_split
 from scipy.stats import pearsonr
 
 # 全局设备对象，在 __main__ 中根据 --device 初始化
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# 全局 k-mer 长度与核酸类型，在 __main__ 中根据 --kmer-len / --n-type 初始化
+KMER_LEN = 6
+N_TYPE = 'DNA'
 
 
 def init_model():
 
-    model = ST_GCN_AltFormer(channel=8, backbone_in_c=128, num_frame=6, num_joints=22,style='ST')
+    num_joints = 22 if str(N_TYPE).upper() == 'DNA' else 23
+    model = ST_GCN_AltFormer(channel=8, backbone_in_c=128, num_frame=KMER_LEN,
+                             num_joints=num_joints, style='ST')
     if DEVICE.type == 'cuda':
         model = torch.nn.DataParallel(model)
     model = model.to(DEVICE)
@@ -78,10 +84,16 @@ def model_predict(X,A,pA,model,criterion):
 
 
 def get_acc(score, labels):
-    score = score.cpu().data.numpy().squeeze()
-    labels = labels.cpu().data.numpy().squeeze()
+    score = score.cpu().data.numpy()
+    labels = labels.cpu().data.numpy()
+    if score.ndim > 1:
+        score = score.squeeze(axis=1)
+    if labels.ndim > 1:
+        labels = labels.squeeze(axis=1)
 
     Rmse = np.sqrt(np.mean((score - labels) ** 2))
+    if len(score) < 2:
+        return Rmse, 0.0
     pearson_coefficient, p_value = pearsonr(score, labels)
     return Rmse, pearson_coefficient
 
@@ -92,7 +104,7 @@ def signal_predict(X,A,model_path,model):
     signal = model(X, A)
     return signal
 
-def fold_training(model,criterion,train_loader,test_loader,train_size):
+def fold_training(model,criterion,train_loader,val_loader,train_size,fold_index,key):
     min_rmse = 80
     max_r = 0
     no_improve_epoch = 0
@@ -100,6 +112,7 @@ def fold_training(model,criterion,train_loader,test_loader,train_size):
     best_epoch = 0
     train_losses = []
     test_losses = []
+    weight_dir = os.path.join(model_fold, key)
     for epoch in range(400):
         model_solver.zero_grad()
 
@@ -140,7 +153,7 @@ def fold_training(model,criterion,train_loader,test_loader,train_size):
             val_loss = 0
             acc_sum = 0
             model.eval()
-            for i, sample_batched in enumerate(test_loader):
+            for i, sample_batched in enumerate(val_loader):
                 label = sample_batched["pA"]
                 score, loss, rmse ,r = model_foreward(sample_batched, model, criterion)
                 val_loss += loss
@@ -170,8 +183,9 @@ def fold_training(model,criterion,train_loader,test_loader,train_size):
                 no_improve_epoch = 0
                 test_rmse = round(test_rmse, 10)
 
+                os.makedirs(weight_dir, exist_ok=True)
                 torch.save(model.state_dict(),
-                           '{}/epoch_{}_train_size_{}_rmse{}.pth'.format(model_fold, epoch + 1, train_size,min_rmse))
+                           os.path.join(weight_dir, f'fold_{fold_index}_best.pth'))
                 print("performance improve, saved the new model......best rmse: {}".format(min_rmse))
                 best_epoch = epoch + 1
             else:
@@ -188,7 +202,7 @@ def fold_training(model,criterion,train_loader,test_loader,train_size):
         if DEVICE.type == 'cuda':
             torch.cuda.empty_cache()
 
-    model_path = '{}/epoch_{}_train_size_{}_rmse{}.pth'.format(model_fold, best_epoch, train_size,min_rmse)
+    model_path = os.path.join(weight_dir, f'fold_{fold_index}_best.pth')
     model.load_state_dict(torch.load(model_path, map_location=DEVICE))
     print('load best model success')
 
@@ -210,8 +224,13 @@ if __name__ == "__main__":
                         help='Directory to save CV results (default: ../train_modified_kmer/result)')
     parser.add_argument('--device', type=str, default='0',
                         help='GPU device index (e.g. 0, 1) or "cpu" (default: 0)')
+    parser.add_argument('--kmer-len', type=int, default=6,
+                        help='k-mer length used to build the model (default: 6)')
+    parser.add_argument('--n-type', type=str, default='DNA', choices=['DNA', 'RNA'],
+                        help='Nucleotide type: DNA or RNA (default: DNA)')
 
     args = parser.parse_args()
+
 
     # ---------- device setup ----------
     if args.device.lower() == 'cpu':
@@ -220,8 +239,11 @@ if __name__ == "__main__":
         os.environ["CUDA_VISIBLE_DEVICES"] = str(args.device)
         DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+    KMER_LEN = args.kmer_len
+    N_TYPE = args.n_type
+
     # .........inital
-    print(f"\ninit............. (device: {DEVICE})")
+    print(f"\ninit............. (device: {DEVICE}, kmer_len: {KMER_LEN}, n_type: {N_TYPE})")
     #........inital data and training
     model_fold = args.model_fold
     local_out = args.result_fold
@@ -238,7 +260,7 @@ if __name__ == "__main__":
 
     for test_size, kmer_train_mat, kmer_test_mat, pA_train_mat, pA_test_mat in cv_folds(kmer_list, pA_list,
                                                                                         folds=5,
-                                                                                        test_sizes=[0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9],
+                                                                                        test_sizes=[0.9,0.8,0.7,0.6,0.5,0.4,0.3,0.2,0.1],
                                                                                         labels=labels):
 
 
@@ -250,6 +272,7 @@ if __name__ == "__main__":
 
         for i in range(kmer_train_mat.shape[0]):
             kmer_train_data = {}
+            kmer_val_data = {}
             kmer_test_data = {}
 
             kmer_train = kmer_train_mat[i]
@@ -257,27 +280,46 @@ if __name__ == "__main__":
             pA_train = pA_train_mat[i]
             pA_test = pA_test_mat[i]
 
-            A_train, X_train = kmer_chemistry.get_AX(kmer_train)
-            A_test, X_test = kmer_chemistry.get_AX(kmer_test)
+            # Split 10% from training set as validation set
+            kmer_train, kmer_val, pA_train, pA_val = train_test_split(
+                kmer_train, pA_train, test_size=0.1, random_state=42)
+
+            # Save dataset splits
+            dataset_dir = os.path.join(model_fold, 'dataset', key)
+            os.makedirs(dataset_dir, exist_ok=True)
+            np.save(os.path.join(dataset_dir, f'fold_{i}_train_kmers.npy'), kmer_train)
+            np.save(os.path.join(dataset_dir, f'fold_{i}_val_kmers.npy'), kmer_val)
+            np.save(os.path.join(dataset_dir, f'fold_{i}_test_kmers.npy'), kmer_test)
+
+            A_train, X_train = kmer_chemistry.get_AX(kmer_train, n_type=N_TYPE)
+            A_val, X_val = kmer_chemistry.get_AX(kmer_val, n_type=N_TYPE)
+            A_test, X_test = kmer_chemistry.get_AX(kmer_test, n_type=N_TYPE)
             X_train = torch.tensor(X_train, dtype=torch.float32)
+            X_val = torch.tensor(X_val, dtype=torch.float32)
             X_test = torch.tensor(X_test, dtype=torch.float32)
             A_train = torch.tensor(A_train, dtype=torch.float32)
+            A_val = torch.tensor(A_val, dtype=torch.float32)
             A_test = torch.tensor(A_test, dtype=torch.float32)
 
             for j in range(A_train.shape[0]):
                 kmer_train_data[j] = {'X': X_train[j], 'A': A_train[j], 'pA': pA_train[j]}
+            for j in range(A_val.shape[0]):
+                kmer_val_data[j] = {'X': X_val[j], 'A': A_val[j], 'pA': pA_val[j]}
             for j in range(A_test.shape[0]):
                 kmer_test_data[j] = {'X': X_test[j], 'A': A_test[j], 'pA': pA_test[j]}
 
             train_loader = torch.utils.data.DataLoader(kmer_train_data, batch_size=32, shuffle=True,
                                                        num_workers=8, pin_memory=False)
 
+            val_loader = torch.utils.data.DataLoader(kmer_val_data, batch_size=32, shuffle=True,
+                                                      num_workers=8, pin_memory=False)
+
             test_loader = torch.utils.data.DataLoader(kmer_test_data, batch_size=32, shuffle=True,
                                                       num_workers=8, pin_memory=False)
 
             model,model_solver,criterion = init()
 
-            model,train_losses,test_losses = fold_training(model,criterion,train_loader,test_loader,train_size)
+            model,train_losses,test_losses = fold_training(model,criterion,train_loader,val_loader,train_size,i,key)
 
             train_score, train_loss, train_rmse, train_r = model_predict(X_train,A_train,pA_train, model, criterion)
             test_score, test_loss, test_rmse, test_r = model_predict(X_test,A_test,pA_test, model, criterion)

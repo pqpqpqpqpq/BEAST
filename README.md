@@ -41,6 +41,13 @@ For modified bases, use the following symbols:
 |---|---|
 | 5mC | M |
 | 5hmC | K |
+| m6A | X |
+
+Canonical RNA 5-mers/9-mers use `U` instead of `T`. The repository bundles example tables under `kmer_models/`:
+R9.4.1 DNA 6-mer (`Canonical.model`, `5mC_OnlyM.model`, `5hmC_OnlyK.model`), RNA004 5-mer/9-mer
+(`RNA004-Canonical-5mer.model`, `RNA004-Canonical-9mer.model`) and an m6A-modified RNA 5-mer table
+(`RNA004-m6A.model`). For every table, the k-mer length and nucleotide type are selected with
+`--kmer-len` and `--n-type` (see the training and prediction sections).
 
 ---
 
@@ -64,16 +71,21 @@ Train the BEAST model using a single k-mer model.
 The script progressively downsamples the input k-mer model samples from 10% to 90% (typically with a 10% step size) and sequentially feeds them into the BEAST architecture.
 
 **Output**  
-Exports trained BEAST model weights for each sampling ratio.
+For every training proportion `<train>-<test>` (e.g. `0.1-0.9`) and every fold, the script saves:
+- model weights: `<model_fold>/<proportion>/fold_<i>_best.pth`
+- dataset splits: `<model_fold>/dataset/<proportion>/fold_<i>_{train,val,test}_kmers.npy`
+- metrics: `<result_fold>/model_weight.npy_fold_<i>_train_size_<train>_test_size_<test>.npy` (r/RMSE per fold, plus `model_weight.npy` with all folds)
 
 **Command-line Arguments**
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `--fn` | `../kmer_models/Canonical.model` | Path to the k-mer model file |
-| `--model_fold` | `../train_modified_kmer` | Directory to save model weights |
+| `--fn` | `./kmer_models/Canonical.model` | Path to the k-mer model file |
+| `--model_fold` | `../train_modified_kmer` | Directory to save model weights and dataset splits |
 | `--result_fold` | `../train_modified_kmer/result` | Directory to save CV results |
-| `--device` | `0` | GPU device index (e.g. `0`, `1`) or `cpu` |
+| `--device` | `0` | GPU device index (e.g. `0`, `1`) or `cpu` (falls back to CPU automatically) |
+| `--kmer-len` | `6` | k-mer length used to build the model (e.g. `5`, `6`, `9`) |
+| `--n-type` | `DNA` | Nucleotide type: `DNA` or `RNA` |
 
 **Examples**
 
@@ -90,6 +102,12 @@ python Train/train_fixed_kmer.py --device cpu
 
 # Run on GPU 0
 python Train/train_fixed_kmer.py --device 0
+
+# Train a 9-mer DNA model (e.g. R10.4.1 / RNA004 canonical 9-mer table)
+python Train/train_fixed_kmer.py \
+    --fn ./kmer_models/RNA004-Canonical-9mer.model \
+    --kmer-len 9 --n-type RNA --device 0
+
 ```
 
 
@@ -106,17 +124,22 @@ Train the BEAST model using two different k-mer models simultaneously.
 The Canonical k-mer model is always fully retained, while the Modified k-mer model is progressively downsampled from 10% to 90%. The mixed data is then used for BEAST training.
 
 **Output**  
-Exports trained BEAST model weights under different modification mixture proportions.
+For every mixture proportion `<train_split>` and every fold:
+- model weights: `<model_fold>/<train_split>/fold_<i>_best.pth`
+- dataset splits: `<model_fold>/dataset/<train_split>/fold_<i>_{train,val,test}_kmers.npy`
+- metrics: `<result_fold>/model_weight.npy_fold_<i>_train_split_<train_split>.npy`
 
 **Command-line Arguments**
 
 | Argument | Default | Description |
 |----------|---------|-------------|
 | `--fn` | `./kmer_models/Canonical.model` | Path to the Canonical k-mer model file |
-| `--fn_M` | `../kmer_models/5mC_OnlyM.model` | Path to the Modified k-mer model file |
-| `--model_fold` | `../train_mixed_kmer` | Directory to save model weights |
+| `--fn_M` | `./kmer_models/5mC_OnlyM.model` | Path to the Modified k-mer model file |
+| `--model_fold` | `../train_mixed_kmer` | Directory to save model weights and dataset splits |
 | `--result_fold` | `../train_mixed_kmer/result` | Directory to save CV results |
-| `--device` | `0` | GPU device index (e.g. `0`, `1`) or `cpu` |
+| `--device` | `0` | GPU device index (e.g. `0`, `1`) or `cpu` (falls back to CPU automatically) |
+| `--kmer-len` | `6` | k-mer length used to build the model (e.g. `5`, `6`, `9`) |
+| `--n-type` | `DNA` | Nucleotide type: `DNA` or `RNA` |
 
 **Examples**
 
@@ -134,6 +157,13 @@ python Train/train_mixed_kmer.py --device cpu
 
 # Run on GPU 0
 python Train/train_mixed_kmer.py --device 0
+
+# Train an m6A-modified RNA 5-mer model (X = m6A)
+python Train/train_mixed_kmer.py \
+    --fn ./kmer_models/RNA004-Canonical-5mer.model \
+    --fn_M ./kmer_models/RNA004-m6A.model \
+    --kmer-len 5 --n-type RNA --device 0
+
 ```
 
 ---
@@ -149,7 +179,12 @@ python kmer_models/pred_kmer_model.py \
     --device 0
 ```
 
-This step performs BEAST inference to predict k-mer-level mean values. Example output files are provided in `kmer_models/r9.4_450bps.nucleotide.6mer.template.model`
+This step performs BEAST inference to predict k-mer-level mean current values.
+`--kmer-model-file` is the **template model** whose `level_mean` column is replaced by the predictions; the output
+therefore has the same columns, k-mer order and row count as the template (`kmer, level_mean, level_stdv, sd_mean, sd_stdv, weight`)
+with `level_mean` substituted by the BEAST predictions.
+The output keeps the comment lines, k-mer order and columns of the template, with `level_mean` replaced by the
+predicted value; the remaining columns (`level_stdv, sd_mean, sd_stdv, weight`) are copied from the template.
 
 
 #### Performance
@@ -165,7 +200,42 @@ This step performs BEAST inference to predict k-mer-level mean values. Example o
 | `--kmer-model-file` | Yes | — | Path to the template k-mer model file |
 | `--fn` | Yes | — | Path to the input k-mer model file |
 | `--output-path` | No | `../pred.model` | Path to save the predicted model |
-| `--device` | No | `0` | GPU device index (e.g. `0`, `1`) or `cpu` |
+| `--device` | No | `0` | GPU device index (e.g. `0`, `1`) or `cpu` (falls back to CPU automatically) |
+| `--kmer-len` | No | `6` | k-mer length used to build the model (e.g. `5`, `6`, `9`); must match the checkpoint |
+| `--n-type` | No | `DNA` | Nucleotide type: `DNA` or `RNA`; must match the checkpoint |
+
+The script prints a run summary (input file, checkpoint, device, number of k-mers processed, template file and output path).
+
+**Examples**
+
+```bash
+# Predict a complete canonical 6-mer table
+python kmer_models/pred_kmer_model.py \
+    --model-weight ./10%_model_weight/Canonical/Canonical_BEAST.pth \
+    --kmer-model-file ./kmer_models/r9.4_450bps.nucleotide.6mer.template.model \
+    --fn ./kmer_models/Canonical.model \
+    --output-path ./output_results/pred.model --device 0
+
+# Predict an m6A-modified RNA 5-mer table (X = m6A)
+python kmer_models/pred_kmer_model.py \
+    --model-weight ./10%_model_weight/m6A_RNA/m6A_RNA_BEAST.pth \
+    --kmer-model-file ./kmer_models/RNA004-m6A.model \
+    --fn ./kmer_models/RNA004-m6A.model \
+    --kmer-len 5 --n-type RNA \
+    --output-path ./output_results/m6A_RNA_pred.model --device 0
+
+```
+
+
+#### Troubleshooting
+
+- **No GPU / CPU-only machine**: pass `--device cpu`, or omit it — the script falls back to CPU automatically when CUDA is unavailable.
+- **Checkpoint loading error (`module.` prefix, `Missing keys`/`Unexpected keys`)**: handled automatically; the loader strips or adds the `module.` prefix so both DataParallel and plain checkpoints load on GPU or CPU.
+- **`k-mer length mismatch` / shape errors**: `--kmer-len` and `--n-type` must match the checkpoint (6-mer DNA weights are provided in `10%_model_weight/`); the `num_frame`/`num_joints` used for 5-mer/9-mer and RNA are derived from these two arguments.
+- **`rdkit` import error**: install it with `pip install rdkit` (already in `requirements.txt`).
+- **Output row count differs from the template**: `--fn` and `--kmer-model-file` must contain the same k-mers in the same order.
+- **Out-of-memory during training**: use another GPU with `--device 1`, or train on CPU with `--device cpu`.
+
 
 ---
 
