@@ -28,7 +28,7 @@ cd BEAST
 pip install -r requirements.txt
 ```
 
-The installation should take less than 10 minutes on a typical desktop pc. The final output is a .model file containing k-mers and their corresponding current levels.
+The installation should take less than 10 minutes on a typical desktop pc. 
 
 ## Training
 
@@ -41,7 +41,7 @@ For modified bases, use the following symbols:
 |---|---|
 | 5mC | M |
 | 5hmC | K |
-| m6A | X |
+| m6A_RNA | X |
 
 Canonical RNA 5-mers/9-mers use `U` instead of `T`. The repository bundles example tables under `kmer_models/`:
 R9.4.1 DNA 6-mer (`Canonical.model`, `5mC_OnlyM.model`, `5hmC_OnlyK.model`), RNA004 5-mer/9-mer
