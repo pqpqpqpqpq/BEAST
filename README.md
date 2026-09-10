@@ -28,7 +28,7 @@ cd BEAST
 pip install -r requirements.txt
 ```
 
-The installation should take less than 10 minutes on a typical desktop pc. 
+The installation should take less than 10 minutes on a typical desktop pc. T
 
 ## Training
 

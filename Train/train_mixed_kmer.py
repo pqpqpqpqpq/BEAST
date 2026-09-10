@@ -80,14 +80,18 @@ def model_predict(X,A,pA,model,criterion):
 def get_acc(score, labels):
     score = score.cpu().data.numpy()
     labels = labels.cpu().data.numpy()
-    score = score.squeeze()
-    labels = labels.squeeze()
+    if score.ndim > 1:
+        score = score.squeeze(axis=1)
+    if labels.ndim > 1:
+        labels = labels.squeeze(axis=1)
     Rmse = np.sqrt(np.mean((score - labels) ** 2))
+    if len(score) < 2:
+        return Rmse, 0.0
     pearson_coefficient, p_value = pearsonr(score, labels)
     return Rmse, pearson_coefficient
 
 def fold_training(model,criterion,train_loader,val_loader,train_split,fold_index,key):
-    min_rmse = 50
+    min_rmse = float('inf')
     max_r = 0
     no_improve_epoch = 0
     n_iter = 0
@@ -348,7 +352,7 @@ if __name__ == "__main__":
             print(f'Train r: {train_r:.4f}, Test r: {test_r:.4f}')
             print(f'Train RMSE: {train_rmse:.4f}, Test RMSE: {test_rmse:.4f}')
 
-            fold_file = f"{local_out + out}_fold_{fold_idx}_train_split_{train_split}.npy"
+            fold_file = f"{os.path.join(local_out, out)}_fold_{fold_idx}_train_split_{train_split}.npy"
             np.save(fold_file, res_dict)
             print(f"Fold {fold_idx} saved to {fold_file}")
 
@@ -356,6 +360,6 @@ if __name__ == "__main__":
             if DEVICE.type == 'cuda':
                 torch.cuda.empty_cache()
 
-        fold_file = f"{local_out + out}{tag}- {train_split}.npy"
+        fold_file = f"{os.path.join(local_out, out)}{tag}- {train_split}.npy"
         np.save(fold_file, res_dict)
         print(f"{tag}- {train_split} saved to {fold_file}")

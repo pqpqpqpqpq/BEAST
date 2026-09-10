@@ -105,7 +105,7 @@ def signal_predict(X,A,model_path,model):
     return signal
 
 def fold_training(model,criterion,train_loader,val_loader,train_size,fold_index,key):
-    min_rmse = 80
+    min_rmse = float('inf')
     max_r = 0
     no_improve_epoch = 0
     n_iter = 0
@@ -336,7 +336,7 @@ if __name__ == "__main__":
 
             print(f"Fold {i} complete, saving...")
 
-            fold_file = f"{local_out + out}_fold_{i}_train_size_{round(train_size, 2)}_test_size_{round(test_size, 2)}.npy"
+            fold_file = f"{os.path.join(local_out, out)}_fold_{i}_train_size_{round(train_size, 2)}_test_size_{round(test_size, 2)}.npy"
 
             np.save(fold_file, cv_res[key])
 
@@ -347,5 +347,5 @@ if __name__ == "__main__":
             if DEVICE.type == 'cuda':
                 torch.cuda.empty_cache()
 
-    np.save(local_out + out, cv_res)
+    np.save(os.path.join(local_out, out), cv_res)
     print('save success')
