@@ -168,6 +168,94 @@ python Train/train_mixed_kmer.py \
 
 ---
 
+---
+
+#### Context-held-out training (`train_context_holdout_kmer.py`)
+
+**Description**  
+Each canonical 6-mer and all of its modification-pattern variants form one *context cluster*. Splits are made at the
+cluster (canonical backbone) level, so a modified test k-mer never shares its canonical backbone with any training
+entry (Supplementary Table S3 and Fig. S17b). The training set contains the modified k-mers of the training clusters
+plus their canonical counterparts; 10% of those modified k-mers are held out for validation.
+
+**Output**  
+- model weights: `<model_fold>/<train_fraction>/fold_<i>_best.pth`
+- dataset splits: `<model_fold>/dataset/<train_fraction>/fold_<i>_{train,val,test}_kmers.npy`
+- metrics: `<result_fold>/model_weight.npy_fold_<i>_train_split_<train_fraction>.npy`
+
+**Command-line Arguments**
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--fn` | `./kmer_models/Canonical.model` | Canonical k-mer model file |
+| `--fn_M` | `./kmer_models/5mC_OnlyM.model` | Modified k-mer model file (5mC or 5hmC) |
+| `--model_fold` | `../train_context_holdout` | Directory to save weights and dataset splits |
+| `--result_fold` | `../train_context_holdout/result` | Directory to save CV results |
+| `--dataset_dir` | — | Optional pre-saved splits `<dir>/<train_fraction>/fold_<i>_*.npy`; if omitted, splits are generated |
+| `--train_splits` | `0.1,...,0.9` | Comma-separated training fractions of the modified table |
+| `--device` | `0` | GPU device index (e.g. `0`, `1`) or `cpu` (falls back to CPU automatically) |
+
+**Examples**
+
+```bash
+# 5mC context-held-out training (splits generated on the fly)
+python Train/train_context_holdout_kmer.py     --fn ./kmer_models/Canonical.model     --fn_M ./kmer_models/5mC_OnlyM.model     --model_fold ./output/context --result_fold ./output/context/result --device 0
+
+# Only the 40% training coverage used in the manuscript
+python Train/train_context_holdout_kmer.py --train_splits 0.4 --device 0
+
+# Reuse pre-saved context splits
+python Train/train_context_holdout_kmer.py --dataset_dir ./output/context/dataset --device 0
+```
+
+#### Zero-shot / few-shot training (`train_zero_few_shot_kmer.py`)
+
+**Description**  
+Leave-modification-out evaluation (Supplementary Figs. S13-S15). Zero-shot modes train on the canonical table plus the
+*other* modification and evaluate on the complete held-out target table; few-shot modes additionally include a fraction
+of the target table and evaluate on the remaining target entries.
+
+| `--mode` | Experiment |
+|---|---|
+| `a` | zero-shot 5mC (train: canonical + 5hmC) |
+| `b` | zero-shot 5hmC (train: canonical + 5mC) |
+| `c` | few-shot 5mC (train: canonical + 5hmC + a fraction of 5mC) |
+| `d` | few-shot 5hmC (train: canonical + 5mC + a fraction of 5hmC) |
+
+**Output**  
+Same layout as above, with `<key>` = `zero_shot_5mC` / `zero_shot_5hmC` (zero-shot) or the few-shot fraction (e.g. `0.1`):
+weights `<model_fold>/<key>/fold_<i>_best.pth`, splits `<model_fold>/dataset/<key>/fold_<i>_*.npy`,
+metrics `<result_fold>/model_weight.npy_fold_<i>_<key>.npy`.
+
+**Command-line Arguments**
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--fn` | `./kmer_models/Canonical.model` | Canonical k-mer model file |
+| `--fn_M` | `./kmer_models/5mC_OnlyM.model` | 5mC k-mer model file |
+| `--fn_K` | `./kmer_models/5hmC_OnlyK.model` | 5hmC k-mer model file |
+| `--mode` | `a` | `a`/`b` zero-shot 5mC/5hmC, `c`/`d` few-shot 5mC/5hmC |
+| `--model_fold` | `../train_zero_few_shot` | Directory to save weights and dataset splits |
+| `--result_fold` | `../train_zero_few_shot/result` | Directory to save CV results |
+| `--train_splits` | `0.1,...,0.9` | Few-shot training fractions (ignored in zero-shot modes) |
+| `--device` | `0` | GPU device index (e.g. `0`, `1`) or `cpu` (falls back to CPU automatically) |
+
+**Examples**
+
+```bash
+# Zero-shot 5mC and few-shot 5mC
+python Train/train_zero_few_shot_kmer.py --mode a --device 0
+python Train/train_zero_few_shot_kmer.py --mode c --train_splits 0.1 --device 0
+
+# Zero-shot 5hmC with custom output directories
+python Train/train_zero_few_shot_kmer.py     --fn ./kmer_models/Canonical.model     --fn_M ./kmer_models/5mC_OnlyM.model     --fn_K ./kmer_models/5hmC_OnlyK.model     --mode b --model_fold ./output/zero_shot --result_fold ./output/zero_shot/result --device 0
+```
+
+Both scripts above train 6-mer DNA models with the same protocol as `train_mixed_kmer.py`
+(AdamW, up to 400 epochs, early stopping patience 15) and use batched inference.
+
+---
+
 ## Predict k-mer Models Using BEAST
 
 ```bash
